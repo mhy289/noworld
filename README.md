@@ -7,6 +7,7 @@
 - **B站视频代理**：代理 B站 用户视频接口，供前端嵌入播放（UA 池 / 限流 / Wbi 参数，绕过跨域与风控）
 - **投票系统**：1-10 数字投票统计（内存存储，并发安全）
 - **健康检查**：`/api/health` 服务探活
+- **对外公开接口**：`/public/*` 只读开放数据接口，与前端 `/api/*` 区分
 - **CORS 支持**：内置跨域中间件，支持前后端分离部署
 
 ## 技术栈
@@ -45,12 +46,26 @@ go build -o myworld-backend .
 
 ## 后端接口
 
+### 前端接口（`/api/*`）
+
+面向网站前端 UI，供浏览器页面调用（含写操作）。
+
 | 方法 | 路径 | 说明 |
 | ---- | ---- | ---- |
 | GET | `/api/health` | 健康检查 |
 | POST | `/api/vote` | 投票 `{ "option": <任意值> }`（内存存储） |
 | GET | `/api/votes` | 获取投票数据 |
 | GET | `/api/bilibili/user/videos?mid=xxx` | B站用户视频代理（UA 池 / 限流 / Wbi 参数） |
+
+### 对外公开接口（`/public/*`）
+
+供第三方/外部系统调用的**只读**开放数据接口，与前端接口在路由前缀、能力范围上明确区分：仅提供查询能力，不含任何写操作。
+
+| 方法 | 路径 | 说明 |
+| ---- | ---- | ---- |
+| GET | `/public/health` | 对外服务状态（精简信息，不暴露内部细节） |
+| GET | `/public/stats/votes` | 对外投票统计（只读） |
+| GET | `/public/bilibili/videos?mid=xxx` | 对外 B站视频数据（只读，复用代理逻辑） |
 
 ## 项目结构
 
@@ -65,7 +80,8 @@ go build -o myworld-backend .
     ├── handler/                # HTTP 接口处理器层
     │   ├── health.go           # GET /api/health
     │   ├── vote.go             # POST /api/vote, GET /api/votes
-    │   └── bilibili.go         # GET /api/bilibili/user/videos
+    │   ├── bilibili.go         # GET /api/bilibili/user/videos
+    │   └── public.go           # 对外公开接口 /public/*（健康 / 投票统计 / B站视频）
     └── service/                # 业务逻辑层
         ├── vote.go             # 投票内存存储（并发安全）
         └── bilibili.go         # B站代理（UA池 / 限流 / Wbi 参数）

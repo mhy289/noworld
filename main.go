@@ -31,7 +31,10 @@ func killPortOwner(port string) {
 		_ = conn // conn 可能为 nil，忽略即可
 	} else {
 		// 端口空闲，无需清理
-		conn.Close()
+		err := conn.Close()
+		if err != nil {
+			return
+		}
 		return
 	}
 
@@ -74,18 +77,26 @@ func main() {
 	defer store.CloseDB()
 	logger.OK("DB", "MySQL 连接成功")
 
-	// 注册路由
+	// 注册前端接口路由（/api/*）
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/health", handler.HandleHealth)
 	mux.HandleFunc("POST /api/vote", handler.HandleVote)
 	mux.HandleFunc("GET /api/votes", handler.HandleVotes)
 	mux.HandleFunc("GET /api/bilibili/user/videos", handler.HandleBilibiliVideos)
-	logger.Info("START", "路由注册完成 (%d 个接口)", 4)
+
+	// 注册对外公开接口路由（/public/*），与前端接口明确区分
+	mux.HandleFunc("GET /public/health", handler.HandlePublicHealth)
+	mux.HandleFunc("GET /public/stats/votes", handler.HandlePublicStatsVotes)
+	mux.HandleFunc("GET /public/bilibili/videos", handler.HandlePublicBilibiliVideos)
+	logger.Info("START", "路由注册完成 (%d 个前端接口, %d 个对外接口)", 4, 3)
 
 	logger.Section("服务已就绪")
 	logger.Info("HTTP", "监听地址   : http://localhost:%s", port)
+	logger.Info("HTTP", "前端接口   : /api/* (健康检查 / 投票 / B站视频)")
+	logger.Info("HTTP", "对外接口   : /public/* (健康 / 投票统计 / B站视频)")
 	logger.Info("HTTP", "健康检查   : http://localhost:%s/api/health", port)
 	logger.Info("HTTP", "B站视频API : http://localhost:%s/api/bilibili/user/videos?mid=165392864", port)
+	logger.Info("HTTP", "对外B站API : http://localhost:%s/public/bilibili/videos?mid=165392864", port)
 	logger.Info("HTTP", "访问日志已启用 (方法 路径 状态码 耗时)")
 
 	// 启动 HTTP 服务（依次叠加访问日志 + CORS 中间件）
