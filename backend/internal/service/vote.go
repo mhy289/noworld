@@ -1,29 +1,16 @@
 // Package service 提供业务逻辑层。
 package service
 
-import "sync"
-
-// 投票数据（内存存储，并发安全）
-var (
-	votes     = make(map[string]int)
-	votesLock sync.Mutex
+import (
+	"myworld-backend/internal/store"
 )
 
-// AddVote 增加一次投票，key 为选项。
-func AddVote(key string) {
-	votesLock.Lock()
-	defer votesLock.Unlock()
-	votes[key]++
+// AddVote 增加一次投票，key 为选项（持久化到 MySQL）。
+func AddVote(key string) error {
+	return store.AddVote(key)
 }
 
-// GetVotes 返回当前所有投票数据的副本。
-func GetVotes() map[string]int {
-	votesLock.Lock()
-	defer votesLock.Unlock()
-	// 返回副本，避免外部修改内部状态
-	copyVotes := make(map[string]int, len(votes))
-	for k, v := range votes {
-		copyVotes[k] = v
-	}
-	return copyVotes
+// GetVotes 返回当前所有投票数据（来自 MySQL）。
+func GetVotes() (map[string]int64, error) {
+	return store.GetVotes()
 }

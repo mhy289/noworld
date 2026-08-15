@@ -21,11 +21,19 @@ func HandleVote(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"error": "missing option"})
 		return
 	}
-	service.AddVote(fmt.Sprint(option))
+	if err := service.AddVote(fmt.Sprint(option)); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]interface{}{"error": "vote failed", "detail": err.Error()})
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{"success": true})
 }
 
 // HandleVotes 获取投票数据：GET /api/votes
 func HandleVotes(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, service.GetVotes())
+	votes, err := service.GetVotes()
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]interface{}{"error": "query failed", "detail": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, votes)
 }

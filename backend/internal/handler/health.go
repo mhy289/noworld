@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"time"
+
+	"myworld-backend/internal/store"
 )
 
 // writeJSON 统一 JSON 响应输出。
@@ -16,9 +18,23 @@ func writeJSON(w http.ResponseWriter, status int, v interface{}) {
 
 // HandleHealth 健康检查：GET /api/health
 func HandleHealth(w http.ResponseWriter, r *http.Request) {
+	dbOK := store.PingDB()
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"status":    "ok",
-		"timestamp": time.Now().Format(time.RFC3339),
-		"message":   "Backend server is running",
+		"status":     "ok",
+		"timestamp":  time.Now().Format(time.RFC3339),
+		"message":    "Backend server is running",
+		"database":   dbStatus(dbOK),
 	})
+}
+
+func dbStatus(ok bool) map[string]interface{} {
+	status := "ok"
+	if !ok {
+		status = "down"
+	}
+	return map[string]interface{}{
+		"connected": ok,
+		"status":    status,
+		"type":      "mysql",
+	}
 }
