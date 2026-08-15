@@ -69,6 +69,10 @@ backend/
     └── service/                # 业务逻辑层
         ├── vote.go             # 投票内存存储（并发安全）
         └── bilibili.go         # B站代理（UA池 / 限流 / Wbi 参数）
+    └── store/                  # 数据库访问层
+        ├── db.go               # MySQL 连接池 + 自动执行 SQL 迁移
+        └── migrations/         # SQL 迁移脚本（服务启动时自动按序执行）
+            └── 001_init.sql    # 初始化建表
 ```
 
 ## 部署

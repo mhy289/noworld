@@ -3,14 +3,20 @@ package store
 
 import (
 	"database/sql"
+	"embed"
 	"fmt"
+	"io/fs"
 	"os"
+	"sort"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
 
 	"myworld-backend/internal/logger"
 )
+
+//go:embed migrations/*.sql
+var migrationsFS embed.FS
 
 // DB 全局数据库连接池。
 var DB *sql.DB
@@ -71,19 +77,43 @@ func InitDB() error {
 		logger.Warn("DB", "建表迁移未执行: %v", err)
 		return fmt.Errorf("migrate: %w", err)
 	}
-	logger.Info("DB", "建表迁移完成 (votes)")
+	logger.Info("DB", "数据库迁移全部完成")
 	return nil
 }
 
-// migrate 建表迁移。
+// migrate 执行建表迁移。
+// 遍历 embed 嵌入的 migrations/*.sql 文件，按文件名升序逐个执行。
+// 每个语句使用 IF NOT EXISTS 保证幂等，可安全重复执行。
 func migrate(db *sql.DB) error {
-	stmt := `
-CREATE TABLE IF NOT EXISTS votes (
-    option_name VARCHAR(255) NOT NULL PRIMARY KEY,
-    count       BIGINT       NOT NULL DEFAULT 0
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`
-	_, err := db.Exec(stmt)
-	return err
+	entries, err := fs.ReadDir(migrationsFS, "migrations")
+	if err != nil {
+		return fmt.Errorf("read migrations dir: %w", err)
+	}
+
+	names := make([]string, 0, len(entries))
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		if len(e.Name()) >= 4 && e.Name()[len(e.Name())-4:] == ".sql" {
+			names = append(names, e.Name())
+		}
+	}
+	// 按文件名升序执行，保证迁移顺序确定（001_init.sql < 002_xxx.sql）
+	sort.Strings(names)
+
+	for _, name := range names {
+		sqlBytes, err := migrationsFS.ReadFile("migrations/" + name)
+		if err != nil {
+			return fmt.Errorf("read migration %s: %w", name, err)
+		}
+		if _, err := db.Exec(string(sqlBytes)); err != nil {
+			logger.Warn("DB", "迁移脚本 %s 执行失败: %v", name, err)
+			return fmt.Errorf("execute migration %s: %w", name, err)
+		}
+		logger.Info("DB", "已执行迁移脚本: %s", name)
+	}
+	return nil
 }
 
 // CloseDB 关闭连接池（进程退出时调用）。
