@@ -4,7 +4,7 @@ on:
   push:
     branches: [master]
     paths:
-      - '**' # 监听所有代码变更（可根据需要调整为特定路径）
+      - '**'
       - '.github/workflows/deploy-backend.yml'
   workflow_dispatch:
 
@@ -32,7 +32,7 @@ jobs:
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -buildvcs=false -o myworld-backend .
           test -f myworld-backend && echo "✅ Build OK: myworld-backend"
 
-      - name: Upload binary via SCP (直接上传到最终目录)
+      - name: Upload binary via SCP
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.SSH_HOST }}
@@ -41,8 +41,8 @@ jobs:
           port: ${{ secrets.SSH_PORT || '22' }}
           source: "myworld-backend"
           target: "/www/wwwroot/api.mhy.ink/"
-          strip_components: 0   # 保持文件路径
-          overwrite: true       # 直接覆盖旧文件
+          strip_components: 0
+          overwrite: true
 
       - name: Restart backend service
         uses: appleboy/ssh-action@v1.0.3
@@ -54,43 +54,24 @@ jobs:
           script: |
             set -e
             DEPLOY_DIR="/www/wwwroot/api.mhy.ink"
-            mkdir -p "$DEPLOY_DIR"
-            cd "$DEPLOY_DIR"
-
-            # 确保文件存在
-            if [ ! -f myworld-backend ]; then
+            
+            if [ ! -f "$DEPLOY_DIR/myworld-backend" ]; then
               echo "❌ Error: myworld-backend not found in $DEPLOY_DIR"
               exit 1
             fi
-            chmod +x myworld-backend
-
-            # 备份旧版本
-            [ -f myworld-backend.bak ] && rm -f myworld-backend.bak.old || true
-            [ -f myworld-backend.bak ] && mv myworld-backend.bak myworld-backend.bak.old || true
-            cp myworld-backend myworld-backend.bak
-
-            # 停止旧进程（用更安全的方式）
-            OLD_PID=$(pgrep -f myworld-backend 2>/dev/null || true)
-            if [ -n "$OLD_PID" ]; then
-              echo "🛑 Stopping old process (PID: $OLD_PID)"
-              kill -15 $OLD_PID || true
-              sleep 3
-              # 如果还在运行，强制杀死
-              kill -9 $OLD_PID 2>/dev/null || true
-            fi
-
-            # 启动新进程
-            echo "🚀 Starting backend..."
-            nohup ./myworld-backend > server.log 2>&1 &
-            NEW_PID=$!
-            sleep 3
-
-            # 检查是否成功启动
-            if kill -0 $NEW_PID 2>/dev/null; then
-              echo "✅ Backend started successfully (PID: $NEW_PID)"
+            
+            chmod +x "$DEPLOY_DIR/myworld-backend"
+            
+            sudo systemctl restart myworld-backend
+            sleep 2
+            
+            if sudo systemctl is-active --quiet myworld-backend; then
+              echo "✅ Backend started successfully"
+              sudo systemctl status myworld-backend --no-pager --lines=0
             else
-              echo "❌ Failed to start backend, check logs:"
-              tail -20 server.log
+              echo "❌ Failed to start backend"
+              sudo systemctl status myworld-backend --no-pager --lines=10
               exit 1
             fi
+            
             echo "✅ Deploy finished."
