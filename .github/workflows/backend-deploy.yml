@@ -54,6 +54,7 @@ jobs:
           script: |
             set -ex
             DEPLOY_DIR="/www/wwwroot/api.mhy.ink"
+            mkdir -p "$DEPLOY_DIR" 
             cd "$DEPLOY_DIR"
             
             # 确保文件存在且可执行
