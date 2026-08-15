@@ -32,6 +32,17 @@ jobs:
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -buildvcs=false -o myworld-backend .
           test -f myworld-backend && echo "✅ Build OK: myworld-backend"
 
+      - name: Stop backend service
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT || '22' }}
+          script: |
+            sudo systemctl stop myworld-backend || true
+            echo "✅ Service stopped"
+
       - name: Upload binary via SCP
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -52,22 +63,9 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SSH_PORT || '22' }}
           script: |
-            set -e
-            DEPLOY_DIR="/www/wwwroot/api.mhy.ink"
-            
-            if [ ! -f "$DEPLOY_DIR/myworld-backend" ]; then
-              echo "❌ Error: myworld-backend not found in $DEPLOY_DIR"
-              exit 1
-            fi
-            
-            chmod +x "$DEPLOY_DIR/myworld-backend"
-            
-            # 重新加载 systemd 配置（确保服务文件是最新的）
             sudo systemctl daemon-reload
-            
-            sudo systemctl restart myworld-backend
+            sudo systemctl start myworld-backend
             sleep 2
-            
             if sudo systemctl is-active --quiet myworld-backend; then
               echo "✅ Backend started successfully"
               sudo systemctl status myworld-backend --no-pager --lines=0
@@ -76,5 +74,4 @@ jobs:
               sudo systemctl status myworld-backend --no-pager --lines=10
               exit 1
             fi
-            
             echo "✅ Deploy finished."
