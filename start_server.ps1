@@ -1,6 +1,6 @@
 $env:DB_HOST = '127.0.0.1'
 $env:DB_PORT = '3306'
-$env:DB_USER = 'root'
+$env:DB_USER = 'mhy'
 $env:DB_PASS = '123456'
 $env:DB_NAME = 'myworld'
 $env:PORT = '8080'
