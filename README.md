@@ -31,8 +31,7 @@
 ## 快速开始
 
 ```bash
-# 启动后端（默认端口 8080）
-cd backend
+# 启动后端（默认端口 8080，仓库根目录即 Go module）
 go run main.go
 
 # 自定义端口
@@ -56,9 +55,10 @@ go build -o myworld-backend .
 ## 项目结构
 
 ```
-backend/
+（仓库根目录即 Go module）
 ├── go.mod                      # Go 模块定义
 ├── main.go                     # 入口：启动服务器、注册路由
+├── start-server.bat            # Windows 启动脚本
 └── internal/
     ├── middleware/
     │   └── cors.go             # CORS 跨域中间件
