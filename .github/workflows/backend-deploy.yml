@@ -52,40 +52,45 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SSH_PORT || '22' }}
           script: |
-            set -ex
+            set -e
             DEPLOY_DIR="/www/wwwroot/api.mhy.ink"
-            mkdir -p "$DEPLOY_DIR" 
+            mkdir -p "$DEPLOY_DIR"
             cd "$DEPLOY_DIR"
-            
-            # 确保文件存在且可执行
+
+            # 确保文件存在
             if [ ! -f myworld-backend ]; then
               echo "❌ Error: myworld-backend not found in $DEPLOY_DIR"
               exit 1
             fi
             chmod +x myworld-backend
-            
-            # 备份旧版本（如果存在）
-            if [ -f myworld-backend.bak ]; then
-              rm -f myworld-backend.bak.old || true
-              mv myworld-backend.bak myworld-backend.bak.old || true
+
+            # 备份旧版本
+            [ -f myworld-backend.bak ] && rm -f myworld-backend.bak.old || true
+            [ -f myworld-backend.bak ] && mv myworld-backend.bak myworld-backend.bak.old || true
+            cp myworld-backend myworld-backend.bak
+
+            # 停止旧进程（用更安全的方式）
+            OLD_PID=$(pgrep -f myworld-backend 2>/dev/null || true)
+            if [ -n "$OLD_PID" ]; then
+              echo "🛑 Stopping old process (PID: $OLD_PID)"
+              kill -15 $OLD_PID || true
+              sleep 3
+              # 如果还在运行，强制杀死
+              kill -9 $OLD_PID 2>/dev/null || true
             fi
-            if [ -f myworld-backend ]; then
-              cp myworld-backend myworld-backend.bak || true
-            fi
-            
-            # 停止旧进程（如果正在运行）
-            pkill -f myworld-backend || true
-            sleep 2
-            
-            # 启动新进程（带日志输出）
+
+            # 启动新进程
+            echo "🚀 Starting backend..."
             nohup ./myworld-backend > server.log 2>&1 &
-            sleep 2
-            
+            NEW_PID=$!
+            sleep 3
+
             # 检查是否成功启动
-            if pgrep -f myworld-backend > /dev/null; then
-              echo "✅ Backend started successfully (PID: $(pgrep -f myworld-backend))"
+            if kill -0 $NEW_PID 2>/dev/null; then
+              echo "✅ Backend started successfully (PID: $NEW_PID)"
             else
-              echo "❌ Failed to start backend, check logs in $DEPLOY_DIR/server.log"
+              echo "❌ Failed to start backend, check logs:"
+              tail -20 server.log
               exit 1
             fi
             echo "✅ Deploy finished."
