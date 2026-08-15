@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"myworld-backend/internal/logger"
 	"myworld-backend/internal/store"
 )
 
@@ -19,11 +20,16 @@ func writeJSON(w http.ResponseWriter, status int, v interface{}) {
 // HandleHealth 健康检查：GET /api/health
 func HandleHealth(w http.ResponseWriter, r *http.Request) {
 	dbOK := store.PingDB()
+	if dbOK {
+		logger.Debug("HTTP", "健康检查通过 (数据库正常)")
+	} else {
+		logger.Warn("HTTP", "健康检查: 数据库连接异常")
+	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"status":     "ok",
-		"timestamp":  time.Now().Format(time.RFC3339),
-		"message":    "Backend server is running",
-		"database":   dbStatus(dbOK),
+		"status":    "ok",
+		"timestamp": time.Now().Format(time.RFC3339),
+		"message":   "Backend server is running",
+		"database":  dbStatus(dbOK),
 	})
 }
 

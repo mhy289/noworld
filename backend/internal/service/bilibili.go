@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"sync"
 	"time"
+
+	"myworld-backend/internal/logger"
 )
 
 // B站代理限流：最小间隔 3 秒 + 额外随机 0-2 秒，避免触发风控
@@ -41,7 +43,7 @@ func waitBeforeRequest() {
 	elapsed := now.Sub(lastRequestTime)
 	if elapsed < minInterval {
 		wait := minInterval - elapsed + time.Duration(rand.Intn(2000))*time.Millisecond
-		fmt.Printf("请求频率限制，等待 %s...\n", wait.Round(time.Second))
+		logger.Warn("BILI", "请求频率限制，等待 %s...", wait.Round(time.Second))
 		time.Sleep(wait)
 	}
 	lastRequestTime = time.Now()
@@ -49,9 +51,9 @@ func waitBeforeRequest() {
 
 // ProxyBilibiliVideos 代理 B站用户视频接口，将响应透传给客户端。
 func ProxyBilibiliVideos(w http.ResponseWriter, mid string) {
+	logger.Info("BILI", "收到视频列表请求, mid=%s", mid)
 	waitBeforeRequest()
-
-	fmt.Printf("正在请求B站API, 用户ID: %s, 时间: %s\n", mid, time.Now().Format("15:04:05"))
+	logger.Info("BILI", "正在请求B站API, mid=%s", mid)
 
 	// 构造 B站请求（含 Wbi 签名参数）
 	req, err := http.NewRequest(http.MethodGet, "https://api.bilibili.com/x/space/arc/search", nil)
@@ -84,9 +86,11 @@ func ProxyBilibiliVideos(w http.ResponseWriter, mid string) {
 	req.Header.Set("Pragma", "no-cache")
 
 	client := &http.Client{Timeout: 25 * time.Second}
+	reqStart := time.Now()
 	resp, err := client.Do(req)
 	if err != nil {
 		// 请求已发出但没有收到响应
+		logger.Error("BILI", "请求B站失败: %v", err)
 		writeError(w, http.StatusServiceUnavailable, "No response from Bilibili server", "B站服务器无响应，请稍后重试")
 		return
 	}
@@ -94,9 +98,11 @@ func ProxyBilibiliVideos(w http.ResponseWriter, mid string) {
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
+		logger.Error("BILI", "读取B站响应失败: %v", err)
 		writeError(w, http.StatusBadGateway, "Failed to read Bilibili response", err.Error())
 		return
 	}
+	logger.Info("BILI", "B站响应: HTTP %d, %d 字节, 耗时 %s", resp.StatusCode, len(body), time.Since(reqStart).Round(time.Millisecond))
 
 	// 透传 B站原始响应（状态码 + JSON），与 Node 版行为一致
 	ct := resp.Header.Get("Content-Type")

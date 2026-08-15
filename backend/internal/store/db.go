@@ -4,11 +4,12 @@ package store
 import (
 	"database/sql"
 	"fmt"
-	"log"
 	"os"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
+
+	"myworld-backend/internal/logger"
 )
 
 // DB 全局数据库连接池。
@@ -64,11 +65,13 @@ func InitDB() error {
 	}
 
 	DB = db
-	log.Printf("[store] connected to MySQL %s:%s database=%s", host, port, dbName)
+	logger.Info("DB", "连接成功 %s:%s database=%s", host, port, dbName)
 
 	if err := migrate(db); err != nil {
+		logger.Warn("DB", "建表迁移未执行: %v", err)
 		return fmt.Errorf("migrate: %w", err)
 	}
+	logger.Info("DB", "建表迁移完成 (votes)")
 	return nil
 }
 
