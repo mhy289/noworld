@@ -32,7 +32,7 @@ var DB *sql.DB
 func InitDB() error {
 	host := getEnv("DB_HOST", "localhost")
 	port := getEnv("DB_PORT", "3306")
-	user := getEnv("DB_USER", "root")
+	user := getEnv("DB_USER", "db")
 	pass := os.Getenv("DB_PASS")
 	dbName := getEnv("DB_NAME", "myworld")
 
