@@ -23,7 +23,7 @@ var DB *sql.DB
 //	DB_PASS  默认空
 //	DB_NAME  默认 myworld
 func InitDB() error {
-	host := getEnv("DB_HOST", "127.0.0.1")
+	host := getEnv("DB_HOST", "localhost")
 	port := getEnv("DB_PORT", "3306")
 	user := getEnv("DB_USER", "root")
 	pass := os.Getenv("DB_PASS")
