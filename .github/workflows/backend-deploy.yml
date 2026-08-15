@@ -4,8 +4,8 @@ on:
   push:
     branches: [master]
     paths:
-      - 'backend/**'
-      - '.github/workflows/backend-deploy.yml'
+      - '**' # 监听所有代码变更（可根据需要调整为特定路径）
+      - '.github/workflows/deploy-backend.yml'
   workflow_dispatch:
 
 concurrency:
@@ -17,10 +17,6 @@ jobs:
     name: Deploy Backend (Go)
     runs-on: ubuntu-latest
 
-    defaults:
-      run:
-        working-directory: backend
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -29,26 +25,26 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.24'
-          cache-dependency-path: backend/go.sum
+          cache-dependency-path: go.sum
 
       - name: Build Linux binary
         run: |
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -buildvcs=false -o myworld-backend .
-          test -f myworld-backend && echo "Build OK: myworld-backend"
+          test -f myworld-backend && echo "✅ Build OK: myworld-backend"
 
-      # 将二进制上传到服务器临时目录
-      - name: Upload binary via SCP
+      - name: Upload binary via SCP (直接上传到最终目录)
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SSH_PORT || '22' }}
-          source: "backend/myworld-backend"
-          target: ${{ secrets.DEPLOY_TMP_DIR || '/tmp/myworld-deploy' }}
+          source: "myworld-backend"
+          target: "/www/wwwroot/api.mhy.ink/"
+          strip_components: 0   # 保持文件路径
+          overwrite: true       # 直接覆盖旧文件
 
-      # 在服务器上替换旧版本并重启服务
-      - name: Deploy & restart service
+      - name: Restart backend service
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SSH_HOST }}
@@ -56,22 +52,39 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SSH_PORT || '22' }}
           script: |
-            set -e
-            DEPLOY_DIR="${{ secrets.DEPLOY_DIR || '/opt/myworld/backend' }}"
-            mkdir -p "$DEPLOY_DIR"
-            # 备份旧版本（若存在）
-            if [ -f "$DEPLOY_DIR/myworld-backend" ]; then
-              cp "$DEPLOY_DIR/myworld-backend" "$DEPLOY_DIR/myworld-backend.bak" || true
+            set -ex
+            DEPLOY_DIR="/www/wwwroot/api.mhy.ink"
+            cd "$DEPLOY_DIR"
+            
+            # 确保文件存在且可执行
+            if [ ! -f myworld-backend ]; then
+              echo "❌ Error: myworld-backend not found in $DEPLOY_DIR"
+              exit 1
             fi
-            # 替换为新二进制
-            install -m 0755 /tmp/myworld-deploy/backend/myworld-backend "$DEPLOY_DIR/myworld-backend"
-            # 重启服务（systemd 或 nohup 二选一，按服务器实际配置调整）
-            if systemctl list-unit-files | grep -q '^myworld-backend.service'; then
-              sudo systemctl restart myworld-backend
-              sudo systemctl --no-pager status myworld-backend --lines=0
+            chmod +x myworld-backend
+            
+            # 备份旧版本（如果存在）
+            if [ -f myworld-backend.bak ]; then
+              rm -f myworld-backend.bak.old || true
+              mv myworld-backend.bak myworld-backend.bak.old || true
+            fi
+            if [ -f myworld-backend ]; then
+              cp myworld-backend myworld-backend.bak || true
+            fi
+            
+            # 停止旧进程（如果正在运行）
+            pkill -f myworld-backend || true
+            sleep 2
+            
+            # 启动新进程（带日志输出）
+            nohup ./myworld-backend > server.log 2>&1 &
+            sleep 2
+            
+            # 检查是否成功启动
+            if pgrep -f myworld-backend > /dev/null; then
+              echo "✅ Backend started successfully (PID: $(pgrep -f myworld-backend))"
             else
-              pkill -f myworld-backend || true
-              cd "$DEPLOY_DIR" && nohup ./myworld-backend > server.log 2>&1 &
-              sleep 2
+              echo "❌ Failed to start backend, check logs in $DEPLOY_DIR/server.log"
+              exit 1
             fi
-            echo "Deploy finished."
+            echo "✅ Deploy finished."
