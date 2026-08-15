@@ -1,7 +1,6 @@
 package store
 
 import (
-	"database/sql"
 	"fmt"
 )
 
@@ -9,6 +8,9 @@ import (
 func AddVote(option string) error {
 	if DB == nil {
 		return fmt.Errorf("database not initialized")
+	}
+	if option == "" || len(option) > 255 {
+		return fmt.Errorf("invalid option: empty or too long (>255)")
 	}
 	const upsert = `
 INSERT INTO votes (option_name, count) VALUES (?, 1)
@@ -31,11 +33,12 @@ func GetVotes() (map[string]int64, error) {
 
 	for rows.Next() {
 		var name string
-		var cnt sql.NullInt64
+		var cnt int64
+		// count 列定义为 NOT NULL DEFAULT 0，可直接扫描为 int64
 		if err := rows.Scan(&name, &cnt); err != nil {
 			return result, err
 		}
-		result[name] = cnt.Int64
+		result[name] = cnt
 	}
 	return result, rows.Err()
 }

@@ -10,8 +10,11 @@ import (
 	"myworld-backend/internal/service"
 )
 
-// HandleVote 投票：POST /api/vote  请求体: { "option": <任意值> }
+// HandleVote 投票：POST /api/vote  请求体: { "option": <字符串|数字> }
 func HandleVote(w http.ResponseWriter, r *http.Request) {
+	// 限制请求体大小，防止超大 body 拖垮服务
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1 MB
+
 	var body map[string]interface{}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		logger.Warn("VOTE", "无效 JSON 请求体: %v", err)
@@ -22,6 +25,14 @@ func HandleVote(w http.ResponseWriter, r *http.Request) {
 	if !ok || option == nil {
 		logger.Warn("VOTE", "请求缺少 option 字段")
 		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"error": "missing option"})
+		return
+	}
+	// 仅接受标量类型的 option，拒绝嵌套对象/数组，避免生成不可控键名
+	switch option.(type) {
+	case string, float64, bool:
+	default:
+		logger.Warn("VOTE", "option 类型不合法: %T", option)
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"error": "invalid option type"})
 		return
 	}
 	optStr := fmt.Sprint(option)

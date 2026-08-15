@@ -57,7 +57,7 @@ jobs:
           port: ${{ secrets.SSH_PORT || '22' }}
           script: |
             set -e
-            DEPLOY_DIR="${{ secrets.DEPLOY_DIR }}"
+            DEPLOY_DIR="${{ secrets.DEPLOY_DIR || '/opt/myworld/backend' }}"
             mkdir -p "$DEPLOY_DIR"
             # 备份旧版本（若存在）
             if [ -f "$DEPLOY_DIR/myworld-backend" ]; then

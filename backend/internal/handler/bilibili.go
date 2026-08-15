@@ -16,5 +16,18 @@ func HandleBilibiliVideos(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"error": "missing mid param"})
 		return
 	}
+	// B站 mid 为纯数字 UID，做基础校验防止非法参数
+	for _, c := range mid {
+		if c < '0' || c > '9' {
+			logger.Warn("BILI", "mid 参数非法: %q", mid)
+			writeJSON(w, http.StatusBadRequest, map[string]interface{}{"error": "invalid mid param"})
+			return
+		}
+	}
+	if len(mid) > 20 {
+		logger.Warn("BILI", "mid 参数过长: %q", mid)
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"error": "invalid mid param"})
+		return
+	}
 	service.ProxyBilibiliVideos(w, mid)
 }

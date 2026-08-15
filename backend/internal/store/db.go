@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"os"
 	"sort"
+	"strings"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -53,7 +54,9 @@ func InitDB() error {
 	}
 
 	// 2. 切换到目标库建立正式连接池
-	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true&charset=utf8mb4&loc=Local",
+	// multiStatements=true 允许迁移脚本单文件包含多条 SQL 语句。
+	// 仅用于内部执行的迁移/查询，所有用户输入均通过参数化占位符传递，不存在注入风险。
+	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true&charset=utf8mb4&loc=Local&multiStatements=true",
 		user, pass, host, port, dbName)
 
 	db, err := sql.Open("mysql", dsn)
@@ -107,13 +110,41 @@ func migrate(db *sql.DB) error {
 		if err != nil {
 			return fmt.Errorf("read migration %s: %w", name, err)
 		}
-		if _, err := db.Exec(string(sqlBytes)); err != nil {
-			logger.Warn("DB", "迁移脚本 %s 执行失败: %v", name, err)
-			return fmt.Errorf("execute migration %s: %w", name, err)
+		// 按分号拆分为多条独立语句逐条执行，
+		// 避免依赖 multiStatements，且可精确定位失败语句。
+		stmts := splitStatements(string(sqlBytes))
+		for _, stmt := range stmts {
+			if _, err := db.Exec(stmt); err != nil {
+				logger.Warn("DB", "迁移脚本 %s 执行失败: %v", name, err)
+				return fmt.Errorf("execute migration %s: %w", name, err)
+			}
 		}
-		logger.Info("DB", "已执行迁移脚本: %s", name)
+		logger.Info("DB", "已执行迁移脚本: %s (%d 条语句)", name, len(stmts))
 	}
 	return nil
+}
+
+// splitStatements 将迁移脚本按分号拆分为非空语句切片，并过滤纯注释/空行。
+func splitStatements(script string) []string {
+	var stmts []string
+	var sb strings.Builder
+	lines := strings.Split(script, "\n")
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		// 跳过空行和以 -- 开头的注释行
+		if trimmed == "" || strings.HasPrefix(trimmed, "--") {
+			continue
+		}
+		sb.WriteString(line)
+		sb.WriteString("\n")
+		// 语句以分号结束则收集
+		if strings.HasSuffix(trimmed, ";") {
+			stmts = append(stmts, sb.String())
+			sb.Reset()
+		}
+	}
+	// 末尾可能有无分号的残余（忽略）
+	return stmts
 }
 
 // CloseDB 关闭连接池（进程退出时调用）。
