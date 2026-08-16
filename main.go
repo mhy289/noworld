@@ -100,7 +100,8 @@ func main() {
 	logger.Info("HTTP", "访问日志已启用 (方法 路径 状态码 耗时)")
 
 	// 启动 HTTP 服务（依次叠加访问日志 + CORS 中间件）
-	handler := middleware.AccessLog(middleware.CORS(mux))
+	// CORS 声明后端实际支持的方法，供预检与 405 提示使用
+	handler := middleware.AccessLog(middleware.CORS(mux, "GET", "POST"))
 	if err := http.ListenAndServe(":"+port, handler); err != nil {
 		logger.Error("HTTP", "服务启动失败: %v", err)
 		os.Exit(1)
