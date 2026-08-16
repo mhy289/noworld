@@ -52,10 +52,22 @@ go build -o myworld-backend .
 - **动态回显方法与 Header**：前端声明的请求方法（`Access-Control-Request-Method`）与自定义请求头（`Access-Control-Request-Headers`）会被原样回显，前端使用 `PUT`/`DELETE`/`PATCH` 或自定义头时也能通过预检。
 - **405 响应也带 CORS 头**：若因方法路由不匹配返回 `405 Method Not Allowed`，响应仍会携带完整跨域头，前端可正常读取错误信息，而非被浏览器拦截为跨域错误。
 
-> **排查提示**：若前端仍报 `405`，请检查——
-> 1. 请求方法是否为后端支持的 `GET` / `POST`（后端方法路由仅注册了这两类）；
-> 2. 请求路径是否正确（`/api/*` 或 `/public/*`）；
-> 3. 是否走了代理（`vite.config.js`）导致请求未真正到达后端。
+> **排查提示**：若前端仍报 `405`，请按顺序检查——
+> 1. **（最常见）请求是否真正到达后端**：前端 axios baseURL 默认是 `/api`（相对路径），部署到独立静态站点后，浏览器会把 `/api/vote` 解析为 `https://前端域名/api/vote`，请求发给了**前端静态服务器/CDN**（如 Cloudflare），而**没有到达后端**。判断方法：看响应头是否有 `server: cloudflare`、`cf-ray`、`cf-cache-status`——若有，说明是 CDN 拦截，**不是后端返回**。
+> 2. **请求方法是否正确**：后端方法路由仅注册了 `GET` / `POST`。
+> 3. **请求路径是否正确**（`/api/*` 或 `/public/*`）。
+> 4. **是否走了代理**（`vite.config.js`）导致请求未真正到达后端。
+
+### 生产环境：前端必须配置后端绝对地址
+
+前端 `src/api/request.js` 的 axios 实例默认 `baseURL: '/api'`。**生产环境部署到异地域名时，必须通过 `VITE_API_BASE_URL` 环境变量指向后端真实地址**（如 `https://api.mhy.ink/api`），否则请求会发到前端同源域名、被静态服务器/CDN 拦截返回 405。
+
+```bash
+# 构建前端时注入后端真实地址
+VITE_API_BASE_URL=https://api.mhy.ink/api npm run build
+```
+
+若后端与前端使用不同域名，依赖后端内置的 CORS 中间件放行跨域（见上文）。
 
 ## 数据库配置
 
