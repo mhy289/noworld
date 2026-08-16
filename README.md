@@ -44,6 +44,42 @@ go build -o myworld-backend .
 
 前端开发服务器需在 `vite.config.js` 将 `/api` 代理到本后端地址（默认 `http://localhost:8080`）。
 
+## 数据库配置
+
+数据库配置支持 **环境变量** 与 **可选 JSON 配置文件** 两种来源，优先级为：**环境变量 > 配置文件 > 内置默认值**。
+
+### 环境变量（推荐，用于部署）
+
+| 环境变量 | 说明 | 默认值 |
+| -------- | ---- | ------ |
+| `DB_HOST` | 数据库地址 | `localhost` |
+| `DB_PORT` | 数据库端口 | `3306` |
+| `DB_USER` | 数据库用户 | `mhy` |
+| `DB_PASS` | 数据库密码 | 空 |
+| `DB_NAME` | 数据库名 | `myworld` |
+| `DB_MAX_OPEN_CONNS` | 最大打开连接数 | `10` |
+| `DB_MAX_IDLE_CONNS` | 最大空闲连接数 | `5` |
+| `DB_CONN_MAX_LIFETIME` | 连接最大生命周期（如 `1h`、`30m`） | `1h0m0s` |
+
+### 配置文件（可选）
+
+设置 `DB_CONFIG_FILE` 指定 JSON 配置文件路径，未显式配置的字段回退到默认值；环境变量仍可覆盖配置文件。参考 `db.config.example.json`：
+
+```json
+{
+  "host": "localhost",
+  "port": "3306",
+  "user": "mhy",
+  "password": "",
+  "database": "myworld",
+  "max_open_conns": 10,
+  "max_idle_conns": 5,
+  "conn_max_lifetime": 3600
+}
+```
+
+> `conn_max_lifetime` 以秒为单位。配置文件解析使用标准库 `encoding/json`，不引入第三方依赖。
+
 ## 后端接口
 
 ### 前端接口（`/api/*`）
@@ -73,7 +109,8 @@ go build -o myworld-backend .
 （仓库根目录即 Go module）
 ├── go.mod                      # Go 模块定义
 ├── main.go                     # 入口：启动服务器、注册路由
-├── start-server.bat            # Windows 启动脚本
+├── start_server.ps1            # Windows 启动脚本（配置环境变量）
+├── db.config.example.json      # 数据库配置文件示例（可选，经 DB_CONFIG_FILE 引用）
 └── internal/
     ├── middleware/
     │   └── cors.go             # CORS 跨域中间件
@@ -86,6 +123,7 @@ go build -o myworld-backend .
         ├── vote.go             # 投票内存存储（并发安全）
         └── bilibili.go         # B站代理（UA池 / 限流 / Wbi 参数）
     └── store/                  # 数据库访问层
+        ├── config.go           # 配置加载：环境变量 + 可选 JSON 配置文件
         ├── db.go               # MySQL 连接池 + 自动执行 SQL 迁移
         └── migrations/         # SQL 迁移脚本（服务启动时自动按序执行）
             └── 001_init.sql    # 初始化建表

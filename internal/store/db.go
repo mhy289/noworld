@@ -6,10 +6,8 @@ import (
 	"embed"
 	"fmt"
 	"io/fs"
-	"os"
 	"sort"
 	"strings"
-	"time"
 
 	_ "github.com/go-sql-driver/mysql"
 
@@ -23,19 +21,20 @@ var migrationsFS embed.FS
 var DB *sql.DB
 
 // InitDB 初始化 MySQL 连接池并执行迁移。
-// 连接参数通过环境变量配置，未设置时使用默认值：
 //
-//	DB_HOST  默认 127.0.0.1
-//	DB_PORT  默认 3306
-//	DB_USER  默认 root
-//	DB_PASS  默认空
-//	DB_NAME  默认 myworld
+// 配置来源遵循「环境变量 > 配置文件 > 内置默认值」的优先级：
+//   - 连接信息：DB_HOST / DB_PORT / DB_USER / DB_PASS / DB_NAME
+//   - 连接池参数：DB_MAX_OPEN_CONNS / DB_MAX_IDLE_CONNS / DB_CONN_MAX_LIFETIME
+//   - 可选 JSON 配置文件：通过 DB_CONFIG_FILE 指定路径（详见 config.go）
 func InitDB() error {
-	host := getEnv("DB_HOST", "localhost")
-	port := getEnv("DB_PORT", "3306")
-	user := getEnv("DB_USER", "mhy")
-	pass := os.Getenv("DB_PASS")
-	dbName := getEnv("DB_NAME", "myworld")
+	cfg, err := loadConfig()
+	if err != nil {
+		return fmt.Errorf("load db config: %w", err)
+	}
+
+	host, port := cfg.Host, cfg.Port
+	user, pass := cfg.User, cfg.Password
+	dbName := cfg.Database
 
 	// 1. 先以不带库名的方式连接，确保目标数据库存在（自动建库）
 	rootDSN := fmt.Sprintf("%s:%s@tcp(%s:%s)/?parseTime=true&charset=utf8mb4&loc=Local",
@@ -64,9 +63,9 @@ func InitDB() error {
 		return fmt.Errorf("open mysql: %w", err)
 	}
 
-	db.SetMaxOpenConns(10)
-	db.SetMaxIdleConns(5)
-	db.SetConnMaxLifetime(time.Hour)
+	db.SetMaxOpenConns(cfg.MaxOpenConns)
+	db.SetMaxIdleConns(cfg.MaxIdleConns)
+	db.SetConnMaxLifetime(cfg.ConnMaxLifetime)
 
 	// 校验连通性
 	if err := db.Ping(); err != nil {
@@ -74,7 +73,8 @@ func InitDB() error {
 	}
 
 	DB = db
-	logger.Info("DB", "连接成功 %s:%s database=%s", host, port, dbName)
+	logger.Info("DB", "连接成功 %s:%s database=%s (池: %d/%d, 生命周期: %s)",
+		host, port, dbName, cfg.MaxOpenConns, cfg.MaxIdleConns, cfg.ConnMaxLifetime)
 
 	if err := migrate(db); err != nil {
 		logger.Warn("DB", "建表迁移未执行: %v", err)
@@ -160,11 +160,4 @@ func PingDB() bool {
 		return false
 	}
 	return DB.Ping() == nil
-}
-
-func getEnv(key, def string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return def
 }
