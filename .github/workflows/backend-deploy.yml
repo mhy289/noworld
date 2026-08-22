@@ -32,7 +32,7 @@ jobs:
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -buildvcs=false -o myworld-backend .
           test -f myworld-backend && echo "✅ Build OK: myworld-backend"
 
-      - name: Stop backend service (Force kill)
+      - name: Stop backend service
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SSH_HOST }}
@@ -40,32 +40,21 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SSH_PORT || '22' }}
           script: |
-            set -e
             echo "🛑 Stopping myworld-backend..."
-            
-            # 1. 禁用自动重启（防止 systemd 在 stop 后重新拉起）
-            sudo systemctl set-property myworld-backend.service Restart=no 2>/dev/null || true
-            
-            # 2. 使用 systemctl stop
+
+            # 1. 正常停止
             sudo systemctl stop myworld-backend 2>/dev/null || true
             sleep 3
-            
-            # 3. 如果进程还在，使用 pkill
-            if pgrep -f myworld-backend > /dev/null; then
-              echo "⚠️ Systemd stop failed, using pkill..."
-              sudo pkill -f myworld-backend || true
+
+            # 2. 检查进程是否还在（用完整路径匹配，避免误杀）
+            if pgrep -f "/www/wwwroot/api.mhy.ink/myworld-backend" > /dev/null; then
+              echo "⚠️ Process still running, force killing..."
+              sudo pkill -9 -f "/www/wwwroot/api.mhy.ink/myworld-backend" || true
               sleep 2
             fi
-            
-            # 4. 如果还在，使用 kill -9
-            if pgrep -f myworld-backend > /dev/null; then
-              echo "⚠️ pkill failed, using kill -9..."
-              sudo pkill -9 -f myworld-backend || true
-              sleep 2
-            fi
-            
-            # 5. 最终检查
-            if pgrep -f myworld-backend > /dev/null; then
+
+            # 3. 最终检查
+            if pgrep -f "/www/wwwroot/api.mhy.ink/myworld-backend" > /dev/null; then
               echo "❌ Failed to kill process!"
               exit 1
             else
