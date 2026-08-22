@@ -9,12 +9,50 @@ import (
 
 // defaultAllowedOrigins 默认允许跨域的前端来源（协议无关，http/https 视为等价）。
 // 校验时只比对「主机名 + 端口」，因此单个条目即可覆盖 http 与 https 两种协议。
-// 部署时可通过环境变量 CORS_ALLOWED_ORIGINS 覆盖（逗号分隔，同样按主机名+端口匹配）。
+// 支持两种条目：
+//   - 精确条目（如 mhy.ink、localhost:5173）：按「主机名+端口」精确匹配
+//   - 通配符条目（如 *.mhy.ink）：匹配任意子域名（www.mhy.ink、sub.mhy.ink 等），
+//     不包含根域名本身（根域需另加精确条目 mhy.ink）
+//
+// 部署时可通过环境变量 CORS_ALLOWED_ORIGINS 追加（逗号分隔，同样支持 *. 通配符写
+// 部署时可通过环境变量 CORS_ALLOWED_ORIGINS 追加（逗号分隔，同样支持 *. 通配符写法）。
 var defaultAllowedOrigins = []string{
 	"mhy289.dpdns.org",
-	"www.mhy.ink",
 	"mhy.ink",
+	"*.mhy.ink",
 	"localhost:5173", // Vite 本地开发
+}
+
+// exactOrigins 缓存规范化后的精确白名单集合，避免每次请求重复解析。
+// wildcardSuffixes 缓存通配符条目（*.domain）的域名后缀列表。
+var exactOrigins, wildcardSuffixes = buildOriginLists()
+
+func buildOriginLists() (map[string]bool, []string) {
+	exact := make(map[string]bool, len(defaultAllowedOrigins))
+	var wildcard []string
+	add := func(list []string) {
+		for _, o := range list {
+			o = strings.TrimSpace(o)
+			if o == "" {
+				continue
+			}
+			if strings.HasPrefix(o, "*.") {
+				if s := strings.TrimPrefix(o, "*."); s != "" {
+					wildcard = append(wildcard, s)
+				}
+				continue
+			}
+			if h := normalizeOrigin(o); h != "" {
+				exact[h] = true
+			}
+		}
+	}
+	add(defaultAllowedOrigins)
+	// 环境变量追加：CORS_ALLOWED_ORIGINS=origin1,origin2,...
+	if env := os.Getenv("CORS_ALLOWED_ORIGINS"); env != "" {
+		add(strings.Split(env, ","))
+	}
+	return exact, wildcard
 }
 
 // allowedOriginSet 缓存规范化后的白名单集合，避免每次请求重复解析。
@@ -57,11 +95,23 @@ func normalizeOrigin(origin string) string {
 }
 
 // isAllowedOrigin 判断请求来源是否在跨域白名单内（协议无关）。
+// 先精确匹配（主机名+端口），再尝试通配符后缀（*.domain 匹配任意子域名）。
+// 通配匹配带点前缀（"."+suffix），避免 evil-mhy.ink 之类的域名误命中 mhy.ink 后缀。
+// 注意：带自定义端口的子域名（如 sub.mhy.ink:8443）不在通配范围内，正常部署用 80/443 无影响。
 func isAllowedOrigin(origin string) bool {
 	if origin == "" {
 		return false
 	}
-	return allowedOriginSet[normalizeOrigin(origin)]
+	host := normalizeOrigin(origin)
+	if exactOrigins[host] {
+		return true
+	}
+	for _, suffix := range wildcardSuffixes {
+		if strings.HasSuffix(host, "."+suffix) {
+			return true
+		}
+	}
+	return false
 }
 
 // CORS 中间件：前后端分离部署（不同域名/端口）时允许跨域。

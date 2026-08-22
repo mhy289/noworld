@@ -77,31 +77,40 @@ func main() {
 	defer store.CloseDB()
 	logger.OK("DB", "MySQL 连接成功")
 
-	// 注册前端接口路由（/api/*）
+	// 统一路由注册：/api/*（同源部署）与 /public/*（分离部署）共享同一套 handler，
+	// 功能完全同构（读写一致），仅路由前缀不同，由前端 .env 的 VITE_API_MODE 选择。
+	// 历史路径（/public/stats/votes、/api/bilibili/user/videos）保留为别名，兼容旧调用。
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/health", handler.HandleHealth)
-	mux.HandleFunc("POST /api/vote", handler.HandleVote)
-	mux.HandleFunc("GET /api/votes", handler.HandleVotes)
-	mux.HandleFunc("GET /api/bilibili/user/videos", handler.HandleBilibiliVideos)
-	mux.HandleFunc("POST /api/visitor/report", handler.HandleVisitorReport)
-	mux.HandleFunc("POST /api/pixel/convert", handler.HandlePixelConvert)
-	mux.HandleFunc("GET /api/messages", handler.HandleMessages)
-	mux.HandleFunc("POST /api/messages", handler.HandleMessageAdd)
-
-	// 注册对外公开接口路由（/public/*），与前端接口明确区分
 	mux.HandleFunc("GET /public/health", handler.HandlePublicHealth)
-	mux.HandleFunc("GET /public/stats/votes", handler.HandlePublicStatsVotes)
-	mux.HandleFunc("GET /public/bilibili/videos", handler.HandlePublicBilibiliVideos)
-	mux.HandleFunc("GET /public/messages", handler.HandlePublicMessages)
-	logger.Info("START", "路由注册完成 (%d 个前端接口, %d 个对外接口)", 8, 4)
+
+	mux.HandleFunc("GET /api/votes", handler.HandleVotes)
+	mux.HandleFunc("GET /public/votes", handler.HandleVotes)
+	mux.HandleFunc("GET /public/stats/votes", handler.HandleVotes) // 旧路径别名
+	mux.HandleFunc("POST /api/vote", handler.HandleVote)
+	mux.HandleFunc("POST /public/vote", handler.HandleVote)
+
+	mux.HandleFunc("GET /api/bilibili/videos", handler.HandleBilibiliVideos)
+	mux.HandleFunc("GET /api/bilibili/user/videos", handler.HandleBilibiliVideos) // 旧路径别名
+	mux.HandleFunc("GET /public/bilibili/videos", handler.HandleBilibiliVideos)
+
+	mux.HandleFunc("POST /api/visitor/report", handler.HandleVisitorReport)
+	mux.HandleFunc("POST /public/visitor/report", handler.HandleVisitorReport)
+	mux.HandleFunc("POST /api/pixel/convert", handler.HandlePixelConvert)
+	mux.HandleFunc("POST /public/pixel/convert", handler.HandlePixelConvert)
+
+	mux.HandleFunc("GET /api/messages", handler.HandleMessages)
+	mux.HandleFunc("GET /public/messages", handler.HandleMessages)
+	mux.HandleFunc("POST /api/messages", handler.HandleMessageAdd)
+	mux.HandleFunc("POST /public/messages", handler.HandleMessageAdd)
+	logger.Info("START", "路由注册完成 (统一接口 8 组, 每组含 /api 与 /public 两个前缀)", 8)
 
 	logger.Section("服务已就绪")
 	logger.Info("HTTP", "监听地址   : http://localhost:%s", port)
-	logger.Info("HTTP", "前端接口   : /api/* (健康检查 / 投票 / B站视频 / 访客上报 / 像素图 / 留言板)")
-	logger.Info("HTTP", "对外接口   : /public/* (健康 / 投票统计 / B站视频 / 留言列表)")
+	logger.Info("HTTP", "同源接口   : /api/*  (健康检查 / 投票 / B站视频 / 访客上报 / 像素图 / 留言板)")
+	logger.Info("HTTP", "公开接口   : /public/* (与 /api/* 同构, 读写一致, 供前后端分离部署)")
 	logger.Info("HTTP", "健康检查   : http://localhost:%s/api/health", port)
-	logger.Info("HTTP", "B站视频API : http://localhost:%s/api/bilibili/user/videos?mid=165392864", port)
-	logger.Info("HTTP", "对外B站API : http://localhost:%s/public/bilibili/videos?mid=165392864", port)
+	logger.Info("HTTP", "B站视频API : http://localhost:%s/api/bilibili/videos?mid=165392864", port)
 	logger.Info("HTTP", "访问日志已启用 (方法 路径 状态码 耗时)")
 
 	// 启动 HTTP 服务（依次叠加访问日志 + CORS 中间件）
