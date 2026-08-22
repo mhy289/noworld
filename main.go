@@ -85,17 +85,20 @@ func main() {
 	mux.HandleFunc("GET /api/bilibili/user/videos", handler.HandleBilibiliVideos)
 	mux.HandleFunc("POST /api/visitor/report", handler.HandleVisitorReport)
 	mux.HandleFunc("POST /api/pixel/convert", handler.HandlePixelConvert)
+	mux.HandleFunc("GET /api/messages", handler.HandleMessages)
+	mux.HandleFunc("POST /api/messages", handler.HandleMessageAdd)
 
 	// 注册对外公开接口路由（/public/*），与前端接口明确区分
 	mux.HandleFunc("GET /public/health", handler.HandlePublicHealth)
 	mux.HandleFunc("GET /public/stats/votes", handler.HandlePublicStatsVotes)
 	mux.HandleFunc("GET /public/bilibili/videos", handler.HandlePublicBilibiliVideos)
-	logger.Info("START", "路由注册完成 (%d 个前端接口, %d 个对外接口)", 6, 3)
+	mux.HandleFunc("GET /public/messages", handler.HandlePublicMessages)
+	logger.Info("START", "路由注册完成 (%d 个前端接口, %d 个对外接口)", 8, 4)
 
 	logger.Section("服务已就绪")
 	logger.Info("HTTP", "监听地址   : http://localhost:%s", port)
-	logger.Info("HTTP", "前端接口   : /api/* (健康检查 / 投票 / B站视频 / 访客上报)")
-	logger.Info("HTTP", "对外接口   : /public/* (健康 / 投票统计 / B站视频)")
+	logger.Info("HTTP", "前端接口   : /api/* (健康检查 / 投票 / B站视频 / 访客上报 / 像素图 / 留言板)")
+	logger.Info("HTTP", "对外接口   : /public/* (健康 / 投票统计 / B站视频 / 留言列表)")
 	logger.Info("HTTP", "健康检查   : http://localhost:%s/api/health", port)
 	logger.Info("HTTP", "B站视频API : http://localhost:%s/api/bilibili/user/videos?mid=165392864", port)
 	logger.Info("HTTP", "对外B站API : http://localhost:%s/public/bilibili/videos?mid=165392864", port)

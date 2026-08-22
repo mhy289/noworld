@@ -78,3 +78,20 @@ func HandlePublicBilibiliVideos(w http.ResponseWriter, r *http.Request) {
 	}
 	service.ProxyBilibiliVideos(w, mid)
 }
+
+// HandlePublicMessages 对外留言列表（只读）：GET /public/messages
+func HandlePublicMessages(w http.ResponseWriter, r *http.Request) {
+	messages, err := service.GetMessages()
+	if err != nil {
+		logger.Error("PUBLIC", "查询对外留言列表失败: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]interface{}{
+			"error":   "query failed",
+			"message": "公开留言数据暂不可用",
+		})
+		return
+	}
+	logger.Info("PUBLIC", "对外留言列表查询成功, 共 %d 条", len(messages))
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"data": messages,
+	})
+}
