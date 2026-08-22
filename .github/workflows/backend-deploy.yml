@@ -32,7 +32,7 @@ jobs:
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -buildvcs=false -o myworld-backend .
           test -f myworld-backend && echo "✅ Build OK: myworld-backend"
 
-      - name: Stop backend service
+      - name: Stop backend service (Force kill)
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SSH_HOST }}
@@ -40,8 +40,37 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SSH_PORT || '22' }}
           script: |
-            sudo systemctl stop myworld-backend
-            echo "✅ Service stopped"
+            set -e
+            echo "🛑 Stopping myworld-backend..."
+            
+            # 1. 禁用自动重启（防止 systemd 在 stop 后重新拉起）
+            sudo systemctl set-property myworld-backend.service Restart=no 2>/dev/null || true
+            
+            # 2. 使用 systemctl stop
+            sudo systemctl stop myworld-backend 2>/dev/null || true
+            sleep 3
+            
+            # 3. 如果进程还在，使用 pkill
+            if pgrep -f myworld-backend > /dev/null; then
+              echo "⚠️ Systemd stop failed, using pkill..."
+              sudo pkill -f myworld-backend || true
+              sleep 2
+            fi
+            
+            # 4. 如果还在，使用 kill -9
+            if pgrep -f myworld-backend > /dev/null; then
+              echo "⚠️ pkill failed, using kill -9..."
+              sudo pkill -9 -f myworld-backend || true
+              sleep 2
+            fi
+            
+            # 5. 最终检查
+            if pgrep -f myworld-backend > /dev/null; then
+              echo "❌ Failed to kill process!"
+              exit 1
+            else
+              echo "✅ Process stopped successfully"
+            fi
 
       - name: Upload binary via SCP
         uses: appleboy/scp-action@v0.1.7
@@ -63,9 +92,16 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SSH_PORT || '22' }}
           script: |
+            set -e
+            echo "🚀 Starting myworld-backend..."
+            
+            # 恢复自动重启策略（如果你希望服务崩溃后自动重启，设为 always）
+            sudo systemctl set-property myworld-backend.service Restart=always 2>/dev/null || true
+            
             sudo systemctl daemon-reload
             sudo systemctl start myworld-backend
-            sleep 2
+            sleep 3
+            
             if sudo systemctl is-active --quiet myworld-backend; then
               echo "✅ Backend started successfully"
               sudo systemctl status myworld-backend --no-pager --lines=0
