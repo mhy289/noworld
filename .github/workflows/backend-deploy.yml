@@ -40,7 +40,7 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SSH_PORT || '22' }}
           script: |
-            sudo systemctl stop myworld-backend || true
+            sudo systemctl stop myworld-backend
             echo "✅ Service stopped"
 
       - name: Upload binary via SCP
