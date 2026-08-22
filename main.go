@@ -84,12 +84,13 @@ func main() {
 	mux.HandleFunc("GET /api/votes", handler.HandleVotes)
 	mux.HandleFunc("GET /api/bilibili/user/videos", handler.HandleBilibiliVideos)
 	mux.HandleFunc("POST /api/visitor/report", handler.HandleVisitorReport)
+	mux.HandleFunc("POST /api/pixel/convert", handler.HandlePixelConvert)
 
 	// 注册对外公开接口路由（/public/*），与前端接口明确区分
 	mux.HandleFunc("GET /public/health", handler.HandlePublicHealth)
 	mux.HandleFunc("GET /public/stats/votes", handler.HandlePublicStatsVotes)
 	mux.HandleFunc("GET /public/bilibili/videos", handler.HandlePublicBilibiliVideos)
-	logger.Info("START", "路由注册完成 (%d 个前端接口, %d 个对外接口)", 5, 3)
+	logger.Info("START", "路由注册完成 (%d 个前端接口, %d 个对外接口)", 6, 3)
 
 	logger.Section("服务已就绪")
 	logger.Info("HTTP", "监听地址   : http://localhost:%s", port)
